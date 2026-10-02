@@ -2,9 +2,11 @@ import os
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
-from llama_index.core import SQLDatabase, Settings
+from llama_index.core import Settings
 from llama_index.core.query_engine import NLSQLTableQueryEngine
 from llama_index.llms.openai import OpenAI
+
+from sql_guard import ReadOnlySQLDatabase, blocked_reason
 
 load_dotenv()
 
@@ -85,7 +87,8 @@ def main():
     )
     Settings.llm = llm
 
-    sql_database = SQLDatabase(
+    # Only single SELECT statements are allowed to reach the database.
+    sql_database = ReadOnlySQLDatabase(
         engine,
         include_tables=[table_name],
     )
@@ -120,6 +123,10 @@ def main():
         print("\nSearching...\n")
         try:
             response = query_engine.query(question)
+            reason = blocked_reason((response.metadata or {}).get("sql_query"))
+            if reason:
+                print(f"\n{reason}")
+                continue
             print("\nAnswer:")
             print(str(response))
         except Exception as e:

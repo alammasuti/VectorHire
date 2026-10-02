@@ -8,9 +8,11 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
 
-from llama_index.core import SQLDatabase, Settings
+from llama_index.core import Settings
 from llama_index.core.query_engine import NLSQLTableQueryEngine
 from llama_index.llms.openai import OpenAI
+
+from sql_guard import ReadOnlySQLDatabase, blocked_reason
 
 load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
@@ -94,7 +96,8 @@ def build_query_engine() -> NLSQLTableQueryEngine:
     )
     Settings.llm = llm
 
-    sql_database = SQLDatabase(engine, include_tables=[table_name])
+    # Only single SELECT statements are allowed to reach the database.
+    sql_database = ReadOnlySQLDatabase(engine, include_tables=[table_name])
 
     return NLSQLTableQueryEngine(
         sql_database=sql_database,
@@ -162,9 +165,15 @@ def search_candidates(request: SearchRequest):
     try:
         response = _query_engine.query(request.question)
         sql = (response.metadata or {}).get("sql_query")
-        return SearchResponse(answer=str(response), sql_query=sql)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+    # The guard already stopped this SQL from running; report it plainly instead
+    # of returning the LLM's attempt to explain the error.
+    reason = blocked_reason(sql)
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
+    return SearchResponse(answer=str(response), sql_query=sql)
 
 
 if __name__ == "__main__":
