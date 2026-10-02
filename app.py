@@ -12,6 +12,8 @@ from llama_index.core import SQLDatabase, Settings
 from llama_index.core.query_engine import NLSQLTableQueryEngine
 from llama_index.llms.openai import OpenAI
 
+from semantic import SemanticSearch, expand_question
+
 load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
 TABLE_CONTEXT = """
@@ -44,6 +46,7 @@ IMPORTANT RULES FOR SQL GENERATION:
 
 class SearchRequest(BaseModel):
     question: str
+    use_semantic: bool = True
 
     model_config = {
         "json_schema_extra": {
@@ -56,20 +59,57 @@ class SearchRequest(BaseModel):
     }
 
 
+class CandidateMatch(BaseModel):
+    id: str
+    name: str | None = None
+    position: str | None = None
+    skills: str | None = None
+    total_experience: float | None = None
+    location: str | None = None
+    score: float
+
+
 class SearchResponse(BaseModel):
     answer: str
     sql_query: str | None = None
+    related_skills: list[str] = []
+    semantic_matches: list[CandidateMatch] = []
+
+
+class SemanticSearchRequest(BaseModel):
+    question: str
+    top_k: int | None = None
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {"question": "container orchestration"},
+                {"question": "someone who can build mobile apps"},
+            ]
+        }
+    }
+
+
+class SemanticSearchResponse(BaseModel):
+    related_skills: list[str]
+    matches: list[CandidateMatch]
+
+
+class ReindexResponse(BaseModel):
+    skills_indexed: int
+    candidates_indexed: int
 
 
 class HealthResponse(BaseModel):
     status: str
     db_table: str
     llm_model: str
+    semantic_search: bool
 
 
 # ── Build query engine (called once at startup) ───────────────────────────────
 
-def build_query_engine() -> NLSQLTableQueryEngine:
+def build_db_engine():
     connection_url = URL.create(
         "mssql+pyodbc",
         username=os.environ["DB_USER"],
@@ -81,8 +121,10 @@ def build_query_engine() -> NLSQLTableQueryEngine:
             "TrustServerCertificate": "yes",
         },
     )
-    engine = create_engine(connection_url)
+    return create_engine(connection_url)
 
+
+def build_query_engine(engine) -> NLSQLTableQueryEngine:
     table_name = os.environ["DB_TABLE"]
     model_name = os.environ.get("LLM_MODEL", "gpt-4o-mini")
 
@@ -107,17 +149,29 @@ def build_query_engine() -> NLSQLTableQueryEngine:
 # ── App lifespan: initialise once on startup ──────────────────────────────────
 
 _query_engine: NLSQLTableQueryEngine | None = None
+_semantic: SemanticSearch | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _query_engine
+    global _query_engine, _semantic
     required = ["OPENAI_API_KEY", "DB_SERVER", "DB_NAME", "DB_USER", "DB_PASSWORD", "DB_TABLE"]
     missing = [k for k in required if not os.environ.get(k)]
     if missing:
         raise RuntimeError(f"Missing environment variables: {', '.join(missing)}")
-    _query_engine = build_query_engine()
+    engine = build_db_engine()
+    _query_engine = build_query_engine(engine)
     print("Query engine ready.")
+
+    if os.environ.get("SEMANTIC_SEARCH", "true").lower() != "false":
+        # Semantic search is an add-on: if embeddings fail, keep serving text-to-SQL.
+        try:
+            _semantic = SemanticSearch.from_env(engine, os.environ["DB_TABLE"])
+            _semantic.build()
+            print(f"Semantic index ready: {_semantic.candidate_count} candidates, {_semantic.skill_count} skills.")
+        except Exception as e:
+            _semantic = None
+            print(f"Semantic search disabled: {e}")
     yield
 
 
@@ -143,6 +197,7 @@ def health():
         status="ok",
         db_table=os.environ.get("DB_TABLE", ""),
         llm_model=os.environ.get("LLM_MODEL", "gpt-4o-mini"),
+        semantic_search=_semantic is not None,
     )
 
 
@@ -152,19 +207,67 @@ def search_candidates(request: SearchRequest):
     Search candidates using a plain English question.
 
     The API will:
-    1. Translate your question into SQL using an LLM
-    2. Run the SQL against your SQL Server candidates table
-    3. Return a human-readable answer with the matching candidates
+    1. Find skills in the table that are semantically related to your question
+       (e.g. "k8s" -> "Kubernetes") and pass them to the LLM as a hint
+    2. Translate your question into SQL using an LLM
+    3. Run the SQL against your SQL Server candidates table
+    4. Return a human-readable answer, plus candidates ranked by embedding similarity
+
+    Set `use_semantic` to false for plain text-to-SQL.
     """
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
     try:
-        response = _query_engine.query(request.question)
+        related, matches = [], []
+        if request.use_semantic and _semantic:
+            related = _semantic.related_skills(request.question)
+            matches = [CandidateMatch(**vars(m)) for m in _semantic.search_candidates(request.question)]
+
+        response = _query_engine.query(expand_question(request.question, related))
         sql = (response.metadata or {}).get("sql_query")
-        return SearchResponse(answer=str(response), sql_query=sql)
+        return SearchResponse(
+            answer=str(response),
+            sql_query=sql,
+            related_skills=related,
+            semantic_matches=matches,
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/candidates/semantic-search", response_model=SemanticSearchResponse, tags=["Candidates"])
+def semantic_search(request: SemanticSearchRequest):
+    """
+    Rank candidates by meaning rather than exact words, using embeddings only (no SQL generation).
+
+    Finds candidates whose role and skills are similar to the question, so a search for
+    "container orchestration" can return someone who lists "Kubernetes".
+    """
+    if not request.question.strip():
+        raise HTTPException(status_code=400, detail="Question cannot be empty.")
+    if not _semantic:
+        raise HTTPException(status_code=503, detail="Semantic search is not available. Check the API logs.")
+
+    try:
+        return SemanticSearchResponse(
+            related_skills=_semantic.related_skills(request.question),
+            matches=[CandidateMatch(**vars(m)) for m in _semantic.search_candidates(request.question, request.top_k)],
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/candidates/reindex", response_model=ReindexResponse, tags=["System"])
+def reindex():
+    """Rebuild the semantic index after candidates are added or changed."""
+    if not _semantic:
+        raise HTTPException(status_code=503, detail="Semantic search is not available. Check the API logs.")
+    try:
+        _semantic.build()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return ReindexResponse(skills_indexed=_semantic.skill_count, candidates_indexed=_semantic.candidate_count)
 
 
 if __name__ == "__main__":

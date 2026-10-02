@@ -14,6 +14,7 @@ EXAMPLES = [
     "Who has more than 3 years of experience?",
     "Show candidates expecting less than 80000 salary",
     "Find candidates who know React or Angular",
+    "Who knows container orchestration?",
 ]
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -34,6 +35,7 @@ with st.sidebar:
         st.success("API Connected")
         st.write(f"**Table:** `{health['db_table']}`")
         st.write(f"**Model:** `{health['llm_model']}`")
+        st.write(f"**Semantic search:** {'on' if health.get('semantic_search') else 'off'}")
     except Exception:
         st.error("API Disconnected")
         st.caption(f"Start the API with: `python app.py`")
@@ -42,9 +44,10 @@ with st.sidebar:
     st.divider()
     st.caption("How it works:")
     st.caption("1. You type a question in plain English")
-    st.caption("2. AI translates it to SQL")
-    st.caption("3. SQL runs against SQL Server")
-    st.caption("4. Results come back as a readable answer")
+    st.caption("2. Embeddings find related skills (e.g. k8s → Kubernetes)")
+    st.caption("3. AI translates it to SQL")
+    st.caption("4. SQL runs against SQL Server")
+    st.caption("5. Results come back as a readable answer, plus semantic matches")
 
 # ── Main area ─────────────────────────────────────────────────────────────────
 
@@ -89,6 +92,8 @@ if search_clicked and question.strip():
 
             st.session_state["last_answer"] = data.get("answer", "")
             st.session_state["last_sql"] = data.get("sql_query")
+            st.session_state["last_related"] = data.get("related_skills") or []
+            st.session_state["last_matches"] = data.get("semantic_matches") or []
             st.session_state["last_error"] = None
 
         except requests.exceptions.ConnectionError:
@@ -110,6 +115,27 @@ elif st.session_state.get("last_answer"):
     st.divider()
     st.subheader("Answer")
     st.info(st.session_state["last_answer"])
+
+    if st.session_state.get("last_related"):
+        st.caption("Related skills used in the search: " + ", ".join(st.session_state["last_related"]))
+
+    if st.session_state.get("last_matches"):
+        st.subheader("Closest matches by meaning")
+        st.dataframe(
+            [
+                {
+                    "Name": m["name"],
+                    "Position": m["position"],
+                    "Skills": m["skills"],
+                    "Experience (yrs)": m["total_experience"],
+                    "Location": m["location"],
+                    "Similarity": m["score"],
+                }
+                for m in st.session_state["last_matches"]
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
 
     if st.session_state.get("last_sql"):
         with st.expander("View generated SQL (what the AI wrote)"):
