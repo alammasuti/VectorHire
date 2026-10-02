@@ -94,6 +94,14 @@ if search_clicked and question.strip():
         except requests.exceptions.ConnectionError:
             st.session_state["last_error"] = "Cannot reach the API. Make sure `python app.py` is running."
             st.session_state["last_answer"] = None
+        except requests.exceptions.HTTPError as e:
+            # Show the API's own message, e.g. "Blocked query: ..." from the SQL guard
+            try:
+                detail = e.response.json().get("detail") or str(e)
+            except ValueError:
+                detail = str(e)
+            st.session_state["last_error"] = detail
+            st.session_state["last_answer"] = None
         except Exception as e:
             st.session_state["last_error"] = str(e)
             st.session_state["last_answer"] = None

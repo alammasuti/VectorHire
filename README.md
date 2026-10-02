@@ -36,12 +36,27 @@ OPENAI_API_KEY=sk-or-v1-your-openrouter-key
 
 DB_SERVER=10.10.10.9\SQLEXPRESS
 DB_NAME=your_database_name
-DB_USER=sa
+DB_USER=vectorhire_reader
 DB_PASSWORD=your_password
 DB_TABLE=SoulsoftJobApplication
 
 LLM_MODEL=gpt-4o-mini
 ```
+
+**3. Use a read-only database user**
+
+The SQL is written by an LLM, so connect with a login that can only read the candidates table. Never use `sa` or any account that can write. Run this once on SQL Server as an admin (change the names and password to match yours):
+
+```sql
+CREATE LOGIN vectorhire_reader WITH PASSWORD = 'choose-a-strong-password';
+USE your_database_name;
+CREATE USER vectorhire_reader FOR LOGIN vectorhire_reader;
+GRANT SELECT ON dbo.SoulsoftJobApplication TO vectorhire_reader;
+```
+
+Then set `DB_USER=vectorhire_reader` and its password in `.env`.
+
+The app also checks every generated query before running it and only allows a single `SELECT` (see `sql_guard.py`). Anything else, such as `DELETE`, `DROP`, `EXEC` or a second statement, is refused with a `Blocked query: ...` error (HTTP 400 from the API). That check is a safety net; the read-only user is what actually protects the data.
 
 ---
 
@@ -98,6 +113,8 @@ uv run python main.py
 ├── app.py          # FastAPI backend (REST API + Swagger)
 ├── ui.py           # Streamlit frontend
 ├── main.py         # CLI version (terminal only)
+├── sql_guard.py    # Rejects any generated SQL that is not a single SELECT
+├── tests/          # Unit tests (uv run python -m unittest)
 ├── pyproject.toml  # Dependencies (managed by uv)
 ├── .env            # Your secrets (never commit this)
 └── .env.example    # Template for .env
