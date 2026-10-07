@@ -15,4 +15,5 @@ def get_engine() -> Engine:
             "TrustServerCertificate": "yes",
         },
     )
+    print(f"Connecting to database at {url}") 
     return create_engine(url)

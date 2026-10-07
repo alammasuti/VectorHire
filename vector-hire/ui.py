@@ -36,7 +36,7 @@ with st.sidebar:
         st.write(f"**Model:** `{health['llm_model']}`")
     except Exception:
         st.error("API Disconnected")
-        st.caption(f"Start the API with: `python app.py`")
+        st.caption(f"Start the API with: `python api.py`")
         st.caption(f"Expected at: `{API_URL}`")
 
     st.divider()
@@ -57,7 +57,7 @@ st.write("**Quick examples — click to use:**")
 cols = st.columns(len(EXAMPLES))
 for col, example in zip(cols, EXAMPLES):
     if col.button(example, use_container_width=True):
-        st.session_state["question"] = example
+        st.session_state["question_input"] = example
 
 st.divider()
 
@@ -65,7 +65,6 @@ st.divider()
 
 question = st.text_input(
     "Your question",
-    value=st.session_state.get("question", ""),
     placeholder="e.g. Find me backend engineers with Python skills",
     key="question_input",
 )
@@ -92,7 +91,7 @@ if search_clicked and question.strip():
             st.session_state["last_error"] = None
 
         except requests.exceptions.ConnectionError:
-            st.session_state["last_error"] = "Cannot reach the API. Make sure `python app.py` is running."
+            st.session_state["last_error"] = "Cannot reach the API. Make sure `python api.py` is running."
             st.session_state["last_answer"] = None
         except Exception as e:
             st.session_state["last_error"] = str(e)

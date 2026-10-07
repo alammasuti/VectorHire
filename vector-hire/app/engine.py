@@ -1,4 +1,5 @@
-from llama_index.core import SQLDatabase, Settings
+from llama_index.core import SQLDatabase, Settings, PromptTemplate
+from llama_index.core.prompts.default_prompts import DEFAULT_TEXT_TO_SQL_TMPL
 from llama_index.core.query_engine import NLSQLTableQueryEngine
 from llama_index.llms.openai import OpenAI
 
@@ -19,17 +20,24 @@ Columns:
 - Availability: when the candidate can start
 - ResumeFileName: name of the uploaded resume file (text label only)
 - AppliedAt: date the candidate applied
-- ExpectedSalary: the salary the candidate expects (numeric)
+- ExpectedSalary: the salary the candidate expects (stored as NVARCHAR text, may contain non-numeric values)
 - Skills: comma-separated list of technical skills (e.g. "Python, Django, PostgreSQL")
-- TotalExperience: total years of work experience (numeric)
-- RelevantExperience: years of experience relevant to the applied role (numeric)
+- TotalExperience: total years of work experience (stored as NVARCHAR text, e.g. '3.5')
+- RelevantExperience: years of experience relevant to the applied role (stored as NVARCHAR text, e.g. '2')
 
 IMPORTANT RULES FOR SQL GENERATION:
 1. NEVER include ResumeFileData in any SELECT — it contains raw binary bytes and will cause errors.
 2. Use LIKE '%skill%' to search inside the Skills column (e.g. Skills LIKE '%Python%').
-3. For experience filters, use TotalExperience or RelevantExperience with numeric comparisons.
+3. ExpectedSalary, TotalExperience and RelevantExperience are NVARCHAR columns. For any numeric comparison,
+   filtering or sorting, ALWAYS use TRY_CAST(column AS FLOAT), never CAST or CONVERT to INT
+   (e.g. WHERE TRY_CAST(TotalExperience AS FLOAT) > 3 ORDER BY TRY_CAST(TotalExperience AS FLOAT) DESC).
 4. Always SELECT useful columns: Name, PositionAppliedFor, Skills, TotalExperience, ExpectedSalary, LocationCityState.
 """
+
+# context_str_prefix is not applied to the SQL prompt, so the rules go into the prompt itself
+TEXT_TO_SQL_PROMPT = PromptTemplate(
+    DEFAULT_TEXT_TO_SQL_TMPL.replace("Only use tables listed below.", TABLE_CONTEXT + "\nOnly use tables listed below.")
+)
 
 # Singleton — built once at startup, reused for every request
 _query_engine: NLSQLTableQueryEngine | None = None
@@ -51,7 +59,7 @@ def init_query_engine() -> None:
     _query_engine = NLSQLTableQueryEngine(
         sql_database=sql_database,
         tables=[DB_TABLE],
-        context_str_prefix=TABLE_CONTEXT,
+        text_to_sql_prompt=TEXT_TO_SQL_PROMPT,
         verbose=True,
     )
 
