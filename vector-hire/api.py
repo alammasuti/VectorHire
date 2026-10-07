@@ -8,10 +8,10 @@ from app.routes import candidates, health
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    validate()                # check all env vars are present
-    init_query_engine()       # connect to DB + set up AI (runs once at startup)
+    validate()
+    init_query_engine()
     print("Query engine ready.")
-    yield                     # server handles requests here
+    yield
 
 
 app = FastAPI(

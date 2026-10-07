@@ -1,4 +1,3 @@
-"""Step 1: embeddings + similarity search vs keyword search (no database)."""
 import sys
 from pathlib import Path
 
@@ -6,7 +5,7 @@ import numpy as np
 from openai import OpenAI
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from app.config import OPENAI_API_KEY  # noqa: E402
+from app.config import OPENAI_API_KEY
 
 EMBED_MODEL = "openai/text-embedding-3-small"
 client = OpenAI(api_key=OPENAI_API_KEY, base_url="https://openrouter.ai/api/v1")

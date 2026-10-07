@@ -34,12 +34,10 @@ IMPORTANT RULES FOR SQL GENERATION:
 4. Always SELECT useful columns: Name, PositionAppliedFor, Skills, TotalExperience, ExpectedSalary, LocationCityState.
 """
 
-# context_str_prefix is not applied to the SQL prompt, so the rules go into the prompt itself
 TEXT_TO_SQL_PROMPT = PromptTemplate(
     DEFAULT_TEXT_TO_SQL_TMPL.replace("Only use tables listed below.", TABLE_CONTEXT + "\nOnly use tables listed below.")
 )
 
-# Singleton — built once at startup, reused for every request
 _query_engine: NLSQLTableQueryEngine | None = None
 
 

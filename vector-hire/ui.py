@@ -16,15 +16,11 @@ EXAMPLES = [
     "Find candidates who know React or Angular",
 ]
 
-# ── Page config ───────────────────────────────────────────────────────────────
-
 st.set_page_config(
     page_title="Candidate Search",
     page_icon="🔍",
     layout="wide",
 )
-
-# ── Sidebar: health status ────────────────────────────────────────────────────
 
 with st.sidebar:
     st.title("Configuration")
@@ -46,12 +42,8 @@ with st.sidebar:
     st.caption("3. SQL runs against SQL Server")
     st.caption("4. Results come back as a readable answer")
 
-# ── Main area ─────────────────────────────────────────────────────────────────
-
 st.title("Candidate Search")
 st.caption("Find candidates by asking questions in plain English — no SQL needed.")
-
-# ── Example buttons ───────────────────────────────────────────────────────────
 
 st.write("**Quick examples — click to use:**")
 cols = st.columns(len(EXAMPLES))
@@ -61,8 +53,6 @@ for col, example in zip(cols, EXAMPLES):
 
 st.divider()
 
-# ── Search input ──────────────────────────────────────────────────────────────
-
 question = st.text_input(
     "Your question",
     placeholder="e.g. Find me backend engineers with Python skills",
@@ -70,8 +60,6 @@ question = st.text_input(
 )
 
 search_clicked = st.button("Search", type="primary", use_container_width=False)
-
-# ── Search logic ──────────────────────────────────────────────────────────────
 
 if search_clicked and question.strip():
     st.session_state["question"] = question
@@ -99,8 +87,6 @@ if search_clicked and question.strip():
 
 elif search_clicked and not question.strip():
     st.warning("Please enter a question first.")
-
-# ── Results ───────────────────────────────────────────────────────────────────
 
 if st.session_state.get("last_error"):
     st.error(st.session_state["last_error"])
