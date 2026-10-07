@@ -16,15 +16,11 @@ EXAMPLES = [
     "Find candidates who know React or Angular",
 ]
 
-# ── Page config ───────────────────────────────────────────────────────────────
-
 st.set_page_config(
     page_title="Candidate Search",
     page_icon="🔍",
     layout="wide",
 )
-
-# ── Sidebar: health status ────────────────────────────────────────────────────
 
 with st.sidebar:
     st.title("Configuration")
@@ -36,7 +32,7 @@ with st.sidebar:
         st.write(f"**Model:** `{health['llm_model']}`")
     except Exception:
         st.error("API Disconnected")
-        st.caption(f"Start the API with: `python app.py`")
+        st.caption(f"Start the API with: `python api.py`")
         st.caption(f"Expected at: `{API_URL}`")
 
     st.divider()
@@ -46,33 +42,24 @@ with st.sidebar:
     st.caption("3. SQL runs against SQL Server")
     st.caption("4. Results come back as a readable answer")
 
-# ── Main area ─────────────────────────────────────────────────────────────────
-
 st.title("Candidate Search")
 st.caption("Find candidates by asking questions in plain English — no SQL needed.")
-
-# ── Example buttons ───────────────────────────────────────────────────────────
 
 st.write("**Quick examples — click to use:**")
 cols = st.columns(len(EXAMPLES))
 for col, example in zip(cols, EXAMPLES):
     if col.button(example, use_container_width=True):
-        st.session_state["question"] = example
+        st.session_state["question_input"] = example
 
 st.divider()
 
-# ── Search input ──────────────────────────────────────────────────────────────
-
 question = st.text_input(
     "Your question",
-    value=st.session_state.get("question", ""),
     placeholder="e.g. Find me backend engineers with Python skills",
     key="question_input",
 )
 
 search_clicked = st.button("Search", type="primary", use_container_width=False)
-
-# ── Search logic ──────────────────────────────────────────────────────────────
 
 if search_clicked and question.strip():
     st.session_state["question"] = question
@@ -92,7 +79,7 @@ if search_clicked and question.strip():
             st.session_state["last_error"] = None
 
         except requests.exceptions.ConnectionError:
-            st.session_state["last_error"] = "Cannot reach the API. Make sure `python app.py` is running."
+            st.session_state["last_error"] = "Cannot reach the API. Make sure `python api.py` is running."
             st.session_state["last_answer"] = None
         except Exception as e:
             st.session_state["last_error"] = str(e)
@@ -100,8 +87,6 @@ if search_clicked and question.strip():
 
 elif search_clicked and not question.strip():
     st.warning("Please enter a question first.")
-
-# ── Results ───────────────────────────────────────────────────────────────────
 
 if st.session_state.get("last_error"):
     st.error(st.session_state["last_error"])

@@ -38,7 +38,7 @@ DB_SERVER=10.10.10.9\SQLEXPRESS
 DB_NAME=your_database_name
 DB_USER=sa
 DB_PASSWORD=your_password
-DB_TABLE=SoulsoftJobApplication
+DB_TABLE=JobApplication
 
 LLM_MODEL=gpt-4o-mini
 ```
@@ -51,7 +51,7 @@ You need **two terminals** running at the same time.
 
 ### Terminal 1 — Start the API
 ```powershell
-python app.py
+python api.py
 ```
 API runs at: `http://localhost:8000`
 
@@ -95,7 +95,7 @@ uv run python main.py
 
 ```
 .
-├── app.py          # FastAPI backend (REST API + Swagger)
+├── api.py          # FastAPI backend (REST API + Swagger)
 ├── ui.py           # Streamlit frontend
 ├── main.py         # CLI version (terminal only)
 ├── pyproject.toml  # Dependencies (managed by uv)
@@ -112,7 +112,7 @@ You type:  "Find Python backend engineers with 2+ years"
                         ↓
            LlamaIndex + OpenRouter LLM
                         ↓
-           SELECT Name, Skills, ... FROM SoulsoftJobApplication
+           SELECT Name, Skills, ... FROM JobApplication
            WHERE Skills LIKE '%Python%' AND TotalExperience >= 2
                         ↓
            SQL Server returns matching rows
