@@ -3,6 +3,7 @@ from fastapi import FastAPI
 
 from app.config import validate
 from app.engine import init_query_engine
+from app.resume_index_manual import build_index
 from app.routes import candidates, health
 
 
@@ -11,6 +12,8 @@ async def lifespan(app: FastAPI):
     validate()
     init_query_engine()
     print("Query engine ready.")
+    build_index()
+    print("Resume vector index ready.")
     yield
 
 

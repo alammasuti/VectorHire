@@ -24,3 +24,63 @@ class HealthResponse(BaseModel):
     status: str
     db_table: str
     llm_model: str
+
+
+class SemanticSearchRequest(BaseModel):
+    query: str
+    top_k: int = 5
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {"query": "someone experienced with container orchestration and CI/CD"},
+                {"query": "backend developer comfortable with relational databases"},
+            ]
+        }
+    }
+
+
+class SemanticSearchResult(BaseModel):
+    candidate_id: int
+    name: str
+    position: str
+    score: float
+    snippet: str
+
+
+class SemanticSearchResponse(BaseModel):
+    results: list[SemanticSearchResult]
+
+
+class ResumeQARequest(BaseModel):
+    candidate_id: int
+    question: str
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {"candidate_id": 1, "question": "What are this candidate's top skills?"},
+                {"candidate_id": 1, "question": "Has the candidate worked with Docker?"},
+            ]
+        }
+    }
+
+
+class ResumeQASource(BaseModel):
+    score: float | None = None
+    text: str
+
+
+class ResumeQAStep(BaseModel):
+    step: str
+    detail: str
+    seconds: float
+
+
+class ResumeQAResponse(BaseModel):
+    candidate_id: int
+    name: str
+    question: str
+    answer: str
+    sources: list[ResumeQASource]
+    steps: list[ResumeQAStep] = []
