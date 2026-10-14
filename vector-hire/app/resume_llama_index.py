@@ -1,13 +1,3 @@
-"""Resume Q&A: ask a natural-language question about ONE candidate's resume (RAG).
-
-Pipeline (each numbered step below is a function in this file):
-    1. load_candidate_resume -> DB gives the file name, PDF is read from resumes/, wrapped in a Document
-    2. create_resume_index   -> chunk + embed the Document into an in-memory vector index
-    3. get_qa_prompt         -> instructions telling the LLM how to answer
-    4. create_qa_engine      -> retriever (find chunks) + LLM (write answer)
-    5. ask_resume_question   -> glue: runs steps 1-4 and returns answer + sources
-"""
-
 import time
 
 from llama_index.core import Document, VectorStoreIndex
@@ -24,15 +14,12 @@ from app.database import get_engine
 from app.resume_index_manual import EMBED_MODEL, extract_pdf_text, read_resume_file
 
 
-# Turns text into vectors. OpenRouter speaks the OpenAI API, so we reuse
-# LlamaIndex's OpenAIEmbedding and just point api_base at OpenRouter.
 _embed_model = OpenAIEmbedding(
     model_name=EMBED_MODEL,
     api_base="https://openrouter.ai/api/v1",
     api_key=OPENAI_API_KEY,
 )
 
-# Built once and reused. temperature=0 -> deterministic, factual answers.
 _llm = OpenAI(
     model=LLM_MODEL,
     temperature=0,
@@ -40,22 +27,10 @@ _llm = OpenAI(
     api_key=OPENAI_API_KEY,
 )
 
-# Building an index costs embedding API calls, so keep one per candidate.
-# NOTE: if a candidate re-uploads a resume, restart the app (or clear this
-# dict) to pick up the new file.
 _index_cache: dict[int, BaseIndex] = {}
 
 
-# ---------------------------------------------------------------------------
-# Step 1: load the resume as a LlamaIndex Document
-# ---------------------------------------------------------------------------
 def load_candidate_resume(candidate_id: int) -> Document | None:
-    """Look up the candidate's resume file name in the DB, read that PDF from
-    the resumes/ folder, and return it as a Document.
-
-    Returns None if the candidate does not exist, the file is missing from the
-    folder, or the PDF has no extractable text (e.g. a scanned image).
-    """
     with get_engine().connect() as conn:
         row = conn.execute(
             text(
@@ -76,7 +51,6 @@ def load_candidate_resume(candidate_id: int) -> Document | None:
     if not resume_text:
         return None
 
-    # metadata travels with every chunk, so answers can be traced to a candidate.
     return Document(
         text=resume_text,
         metadata={
@@ -88,33 +62,14 @@ def load_candidate_resume(candidate_id: int) -> Document | None:
     )
 
 
-# ---------------------------------------------------------------------------
-# Step 2: build a vector index from the Document
-# ---------------------------------------------------------------------------
 def create_resume_index(resume_document: Document) -> BaseIndex:
-    """Split the resume into chunks, embed each chunk, and store them in memory.
-
-    from_documents() does the whole ingestion in one call:
-    Document -> chunks (default SentenceSplitter) -> embeddings -> index.
-    We pass embed_model explicitly so LlamaIndex never falls back to its
-    default (real OpenAI) embeddings.
-    """
     return VectorStoreIndex.from_documents(
         [resume_document],
         embed_model=_embed_model,
     )
 
 
-# ---------------------------------------------------------------------------
-# Step 3: the prompt the LLM receives
-# ---------------------------------------------------------------------------
 def get_qa_prompt() -> PromptTemplate:
-    """Instructions + placeholders; LlamaIndex fills them in for every question.
-
-    {context_str} -> the resume chunks the retriever found
-    {query_str}   -> the user's question
-    Telling the model to answer ONLY from the resume reduces hallucination.
-    """
     return PromptTemplate(
         "You are a recruitment assistant reviewing a single candidate's resume.\n"
         "Answer the question using ONLY the resume excerpts below.\n"
@@ -129,15 +84,7 @@ def get_qa_prompt() -> PromptTemplate:
     )
 
 
-# ---------------------------------------------------------------------------
-# Step 4: retriever + LLM = query engine
-# ---------------------------------------------------------------------------
 def create_qa_engine(resume_index: BaseIndex, top_k: int = 3) -> RetrieverQueryEngine:
-    """Combine retrieval and generation.
-
-    Retriever: embeds the question and returns the top_k most similar chunks.
-    Query engine: stuffs those chunks into the prompt and asks the LLM.
-    """
     retriever = VectorIndexRetriever(index=resume_index, similarity_top_k=top_k)
     return RetrieverQueryEngine.from_args(
         retriever=retriever,
@@ -146,17 +93,7 @@ def create_qa_engine(resume_index: BaseIndex, top_k: int = 3) -> RetrieverQueryE
     )
 
 
-# ---------------------------------------------------------------------------
-# Step 5: the function the API calls
-# ---------------------------------------------------------------------------
 def ask_resume_question(candidate_id: int, question: str) -> dict | None:
-    """Answer `question` about one candidate. Returns None if no resume found.
-
-    Return shape:
-        {"candidate_id": 1, "name": "...", "question": "...",
-         "answer": "...", "sources": [{"score": 0.82, "text": "..."}]}
-    """
-    # Processing trace shown in the UI: what happened and how long it took.
     steps: list[dict] = []
 
     def log(step: str, detail: str, started: float) -> None:
@@ -183,7 +120,6 @@ def ask_resume_question(candidate_id: int, question: str) -> dict | None:
     response = create_qa_engine(index).query(question)
     log("Retrieval + answer", f"Found {len(response.source_nodes)} matching chunk(s) and asked the LLM", t)
 
-    # source_nodes = the exact chunks the LLM was shown -> lets users verify the answer.
     sources = [
         {"score": node.score, "text": node.get_content()[:300]}
         for node in response.source_nodes
@@ -201,7 +137,6 @@ def ask_resume_question(candidate_id: int, question: str) -> dict | None:
 
 
 def list_candidates_with_resumes() -> list[dict]:
-    """Candidates whose resume file exists in resumes/ (used by the UI dropdown)."""
     with get_engine().connect() as conn:
         rows = conn.execute(
             text(

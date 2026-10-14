@@ -1,5 +1,3 @@
-"""Peek inside the local Chroma vector store: see what's indexed, and inspect raw chunks/embeddings."""
-
 import sys
 from pathlib import Path
 

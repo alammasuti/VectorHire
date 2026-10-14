@@ -14,7 +14,6 @@ DB_USE_WINDOWS_AUTH = os.environ.get("DB_USE_WINDOWS_AUTH", "").strip().lower() 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
 LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4o-mini").strip()
 
-# Required for all connections.
 REQUIRED_KEYS = ["OPENAI_API_KEY", "DB_SERVER", "DB_NAME", "DB_TABLE"]
 AUTH_KEYS = ["DB_USER", "DB_PASSWORD"]
 

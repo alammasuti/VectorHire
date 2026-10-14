@@ -7,7 +7,6 @@ from llama_index.llms.openai import OpenAI
 from app import config
 from app.config import OPENAI_API_KEY, LLM_MODEL
 from app.resume_index_manual import extract_pdf_text, read_resume_file
-# your own helpers: read_resume_file, extract_pdf_text, EMBED_MODEL from app.resume_index
 
 EMBED_MODEL = "openai/text-embedding-3-small"
 
@@ -31,26 +30,21 @@ print("LLM initialized:", _llm.model)
 def make_document(file_name, name):
     pdf_bytes = read_resume_file(file_name)
     if pdf_bytes is None:
-        # print(f"File {file_name} not found or could not be read.")
         return None
     extracted_text = extract_pdf_text(pdf_bytes)
-    # print(f"Extracted text from {file_name}: {extracted_text[:100]}...")
 
     return Document(
         text=extracted_text,
         doc_id=name,
         metadata={"source": file_name},
-        # Print first 100 chars
     )
 
 
 def build_index(doc: Document) -> VectorStoreIndex:
-    """Build a LlamaIndex index from the given Document."""
     return VectorStoreIndex.from_documents([doc], embed_model=_embed_model)
 
 
 def create_prompt():
-    """Create a prompt template for the LLM."""
     prompt_template = (
         "You are a helpful assistant that answers questions about resumes.\n"
         "Use the following context to answer the question:\n"
@@ -62,7 +56,6 @@ def create_prompt():
 
 
 def _build_query_engine(index: VectorStoreIndex) -> RetrieverQueryEngine:
-    """Build a query engine from the given index."""
     return RetrieverQueryEngine.from_args(
         retriever=VectorIndexRetriever(index=index),
         llm=_llm,
@@ -73,7 +66,6 @@ _index_cache = {}
 _answer_cache = {}
 
 def ask_question_with_doc(question: str, doc_name: str) -> dict | None:
-    """Answer one question about one resume. Returns a single dict."""
     question = question.strip()
     if not question:
         return None
@@ -108,8 +100,6 @@ def ask_question_with_doc(question: str, doc_name: str) -> dict | None:
 
 
 if __name__ == "__main__":
-    # print("final doc  ------------------>", doc, len(doc.text))
-    # print("final index  ------------------>", index,len(index.docstore.docs))
     while True:
         question = input("Enter your question (or 'exit' to quit): ")
         if question.lower() == "exit":
@@ -124,10 +114,3 @@ if __name__ == "__main__":
         except FileNotFoundError as e:
             print(e)
 
-    # query_engine = build_query_engine(index)
-    # response = query_engine.query("What skills does the resume mention?")
-    # # print("Query response ------------------>", response,response.source_nodes)
-    # for node in response.source_nodes:
-    #     print("<------------------------------------------------>")
-    #     print("Source node text:", node.node.text)
-    #     print("Source node metadata:",node.score, node.metadata)
