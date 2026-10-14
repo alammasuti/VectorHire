@@ -36,12 +36,15 @@ OPENAI_API_KEY=sk-or-v1-your-openrouter-key
 
 DB_SERVER=10.10.10.9\SQLEXPRESS
 DB_NAME=your_database_name
-DB_USER=sa
-DB_PASSWORD=your_password
+DB_USER=
+DB_PASSWORD=
+DB_USE_WINDOWS_AUTH=true
 DB_TABLE=JobApplication
 
 LLM_MODEL=gpt-4o-mini
 ```
+
+For Windows authentication, leave `DB_USER` and `DB_PASSWORD` blank and set `DB_USE_WINDOWS_AUTH=true` (or leave both blank to use the default integrated-security flow).
 
 ---
 
