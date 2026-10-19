@@ -4,7 +4,8 @@ from fastapi import FastAPI
 from app.config import validate
 from app.engine import init_query_engine
 from app.resume_index_manual import build_index
-from app.routes import candidates, health
+from app.routes import candidates, health, sk
+from app.sk_agent import init_agent
 
 
 @asynccontextmanager
@@ -14,6 +15,8 @@ async def lifespan(app: FastAPI):
     print("Query engine ready.")
     build_index()
     print("Resume vector index ready.")
+    init_agent()
+    print("Semantic Kernel agent ready.")
     yield
 
 
@@ -31,6 +34,7 @@ app = FastAPI(
 
 app.include_router(health.router)
 app.include_router(candidates.router, prefix="/candidates")
+app.include_router(sk.router, prefix="/sk")
 
 
 if __name__ == "__main__":

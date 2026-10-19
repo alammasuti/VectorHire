@@ -52,6 +52,25 @@ class SemanticSearchResponse(BaseModel):
     results: list[SemanticSearchResult]
 
 
+class AskRequest(BaseModel):
+    question: str
+    conversation_id: str | None = None
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {"question": "Who has experience with container orchestration and CI/CD?"},
+                {"question": "Now filter those by salary under 80000", "conversation_id": "abc123"},
+            ]
+        }
+    }
+
+
+class AskResponse(BaseModel):
+    answer: str
+    conversation_id: str
+
+
 class ResumeQARequest(BaseModel):
     candidate_id: int
     question: str
