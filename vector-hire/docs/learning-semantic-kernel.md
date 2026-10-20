@@ -70,8 +70,11 @@ Stack used throughout: OpenRouter (existing `OPENAI_API_KEY`/base_url) + your ex
   - Limitations: histories live in memory (lost on restart) and grow without limit. Answers also vary between runs, which is what evals will measure
 
 ### 2c. Filters (SK's hook/middleware system)
-- [ ] What it is: intercepting a function call before/after execution — e.g. logging every tool call, or blocking a specific tool
-- [ ] Add a simple logging filter that prints which function was called and with what arguments
+- [x] What it is: intercepting a function call before/after execution — e.g. logging every tool call, or blocking a specific tool
+- [x] Add a simple logging filter that prints which function was called and with what arguments — `tool_call_logger` in `app/sk_agent.py`, registered with `kernel.add_filter(FilterTypes.AUTO_FUNCTION_INVOCATION, ...)`
+  - Verified with a mixed question: logged both `sql_search` (8.6s) and `semantic_search` (1.0s) with arguments, result preview and timing
+  - Learning point: the filter wraps the call. Code before `await next(context)` runs before the tool, code after it runs afterwards. Not calling `next` would block the tool
+  - Insight: the arguments show how the model rewrote the user's question for each tool (e.g. "Python experience"), which explains why some answers vary
 
 ---
 
@@ -92,6 +95,43 @@ Stack used throughout: OpenRouter (existing `OPENAI_API_KEY`/base_url) + your ex
 
 ---
 
+## Step 4 — Beyond Semantic Kernel (general AI engineering topics, not yet covered)
+
+Ordered by priority. Items 4a and 4b are the recommended next steps, since they build on the agent that already exists.
+
+### 4a. Evals (measuring quality) — recommended next
+- [ ] What it is: a fixed set of test questions with expected results, run through the agent and scored, so quality is measured instead of eyeballed
+- [ ] Why: the same question gives different answers across runs (seen with the follow-up "filter those by salary"), and today the only check is reading the output
+- [ ] Build: a small question set (SQL-shaped, skills-shaped, mixed, follow-up, no-tool, no-match), expected tool choice and expected candidates per question, a script that runs each one several times and reports pass rate and consistency
+- [ ] Learn: retrieval metrics (did the right candidate appear?), tool-choice accuracy, LLM-as-judge for free-text answers, regression checks after prompt changes
+
+### 4b. Guardrails and security — recommended next
+- [ ] What it is: protecting the system from bad input and bad model output
+- [ ] Why: `sql_search` runs model-written SQL against a real database, and resume text is untrusted input the model reads
+- [ ] Learn: read-only database user for the SQL tool, validating or allow-listing generated SQL, prompt injection (a resume containing "ignore your instructions"), limiting what personal data (phone, email) answers can expose
+
+### 4c. Prompt engineering and structured output
+- [ ] Few-shot examples, forcing JSON or schema output, and writing tool-query rules that fix weak follow-up searches (the model currently rewrites follow-ups without the earlier candidate names unless told to)
+
+### 4d. Better retrieval
+- [ ] Hybrid search (keywords plus meaning), reranking, metadata filters, chunking strategies
+- [ ] Why: semantic scores in this project are low and close together (e.g. 42%, 22%, 19%), so ranking quality is a real weakness
+
+### 4e. Observability and cost
+- [ ] Token counting, cost per request, latency tracing, logs that survive restarts
+- [ ] Builds on: the tool-call timings already shown in the SK Agent tab
+
+### 4f. Production concerns
+- [ ] Store conversation history in a database (today it is in memory and lost on restart), trim long histories, stream answers, cache repeated questions
+
+### 4g. Remaining topics (lower priority)
+- [ ] Planners and multi-agent orchestration (Step 3)
+- [ ] MCP (see out-of-scope note below)
+- [ ] Fine-tuning versus RAG (concept) and multimodal input
+- [ ] Azure stack: Azure OpenAI replacing OpenRouter, Azure AI Search replacing Chroma, Azure AI Foundry for management and evaluation
+
+---
+
 ## Explicitly out of scope for now
 
 - **MCP (Model Context Protocol):** a way to expose tools across different AI apps/frameworks via a standard protocol. Not needed here — your tools live in the same Python process as the Kernel, so there's no cross-app/cross-process reuse need. Revisit only if you want another AI app (e.g. Claude Desktop) to call your resume-search tool too.
@@ -108,4 +148,6 @@ Stack used throughout: OpenRouter (existing `OPENAI_API_KEY`/base_url) + your ex
 | 2026-10-18 | Step 1c/1d — Plugin + Automatic Function Calling | `scripts/sk_plugin_demo.py`, results matched Step 0's raw version exactly on both test questions |
 | 2026-10-18 | Step 1 complete — `/sk/ask` FastAPI endpoint | `app/sk_agent.py` + `app/routes/sk.py`, verified live via curl with a mixed question (both tools called, correct combined answer) |
 | 2026-10-18 | Step 2a — prompt templates | `app/prompts/candidate_assistant.txt` loaded by `app/sk_agent.py`, verified answers follow the template's rules |
+| 2026-10-20 | Step 2c — filters (Step 2 complete) | `tool_call_logger` filter in `app/sk_agent.py`, verified on a mixed question |
+| 2026-10-20 | UI: SK Agent chat tab with tool details | New tab in `ui.py`; `/sk/ask` now returns `tool_calls` and `total_seconds`. Lesson: a leftover server worker on the same port served old code, so check what is actually listening when results look stale |
 | 2026-10-18 | Step 2b — chat history | `ChatHistory` per `conversation_id` in `app/sk_agent.py`, verified a follow-up over HTTP; added a rule so tool queries carry earlier candidate names |

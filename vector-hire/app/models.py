@@ -66,9 +66,18 @@ class AskRequest(BaseModel):
     }
 
 
+class ToolCall(BaseModel):
+    tool: str
+    arguments: dict[str, str]
+    seconds: float
+    result_preview: str
+
+
 class AskResponse(BaseModel):
     answer: str
     conversation_id: str
+    tool_calls: list[ToolCall] = []
+    total_seconds: float | None = None
 
 
 class ResumeQARequest(BaseModel):

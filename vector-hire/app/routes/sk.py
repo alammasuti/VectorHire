@@ -1,3 +1,4 @@
+import time
 import uuid
 
 from fastapi import APIRouter, HTTPException
@@ -23,7 +24,13 @@ async def ask_candidates(request: AskRequest):
 
     conversation_id = request.conversation_id or uuid.uuid4().hex
     try:
-        answer = await ask_agent(request.question, conversation_id)
-        return AskResponse(answer=answer, conversation_id=conversation_id)
+        started = time.perf_counter()
+        answer, tool_calls = await ask_agent(request.question, conversation_id)
+        return AskResponse(
+            answer=answer,
+            conversation_id=conversation_id,
+            tool_calls=tool_calls,
+            total_seconds=round(time.perf_counter() - started, 2),
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
